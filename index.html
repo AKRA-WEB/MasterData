@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <title>ข้อมูลกลาง · BUYMORETH</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="js/akra-shell-bridge.js"></script>
+  <script src="assets/vendor/xlsx-0.20.3.full.min.js" defer></script>
+  <script src="js/import-parser.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">ข้ามไปเนื้อหา</a>
+  <section class="session-screen" id="session-screen" aria-live="polite">
+    <h1>ข้อมูลกลาง</h1><p id="session-message">กำลังตรวจสอบเซสชัน Main…</p>
+    <button type="button" class="button button-secondary" id="auth-retry" hidden>ตรวจสอบอีกครั้ง</button>
+    <a class="button button-primary" href="https://akra-web.github.io/Main/">กลับ Main</a>
+  </section>
+  <div id="app-content" hidden>
+    <aside class="sidebar" aria-label="เมนูหลัก">
+      <div class="brand"><span class="brand-mark">BM</span><span>BUYMORETH<small>พื้นที่ทำงาน</small></span></div>
+      <div class="sidebar-section">เมนูหลัก</div>
+      <nav><button class="nav-muted" type="button" data-action="home">กลับหน้าหลัก</button><a class="nav-active" href="./" aria-current="page">ข้อมูลกลาง</a></nav>
+      <div class="sidebar-footer"><div id="user-name"></div></div>
+    </aside>
+    <div class="app-shell">
+      <header class="workspace-bar"><div class="workspace-location"><span class="mobile-brand">BM</span><span>พื้นที่ทำงาน <span class="breadcrumb-divider">/</span> <strong>ข้อมูลกลาง</strong></span></div><button class="button button-subtle" type="button" data-action="home">กลับ Main</button></header>
+      <main id="main-content" tabindex="-1">
+        <div class="page-heading"><div><h1>ข้อมูลกลาง</h1><p>จัดการรายชื่อสินค้า Vendor และสมาชิกในที่เดียว</p></div><div class="heading-actions"><button type="button" class="button button-secondary" id="open-import">นำเข้าข้อมูล</button><button type="button" class="button button-primary" id="add-record">เพิ่มรายการ</button></div></div>
+        <div class="app-message" id="app-message" role="alert" hidden></div>
+        <div id="catalog-view">
+          <div class="dataset-tabs" id="dataset-tabs" role="tablist" aria-label="ประเภทข้อมูล"></div>
+          <div class="catalog-grid" id="catalog-grid">
+            <section class="list-surface" aria-label="รายการข้อมูลกลาง">
+              <div class="list-toolbar"><label class="search-control" for="catalog-search"><span id="search-icon" aria-hidden="true"></span><input type="search" id="catalog-search" placeholder="ค้นหารหัสหรือชื่อ…" autocomplete="off"><span class="search-key" aria-hidden="true">/</span></label><label class="status-control"><span class="sr-only">กรองสถานะ</span><select id="status-filter"><option value="active">ใช้งานอยู่</option><option value="all">ทุกสถานะ</option><option value="inactive">ปิดใช้งาน</option></select></label></div>
+              <div class="list-context"><span id="list-count"></span><span>คลิกแถวเพื่อดูรายละเอียด</span></div>
+              <div id="record-list" aria-live="polite"></div>
+              <div class="list-footer"><span id="source-caption"></span><div class="pagination"><button class="button button-subtle" type="button" data-action="previous-page">ก่อนหน้า</button><span id="page-number"></span><button class="button button-subtle" type="button" data-action="next-page">ถัดไป</button></div></div>
+            </section>
+            <aside class="detail-panel" id="detail-panel" aria-label="รายละเอียดรายการ"></aside>
+          </div>
+        </div>
+        <section class="import-surface" id="import-view" aria-labelledby="import-title" hidden></section>
+      </main>
+      <footer class="workspace-footer">BUYMORETH <span>·</span> ข้อมูลกลาง <span id="app-version"></span></footer>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+</body>
+</html>

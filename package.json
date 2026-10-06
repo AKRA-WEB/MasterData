@@ -1,0 +1,12 @@
+{
+  "name":"akra-master-data",
+  "version":"20261006.1.0",
+  "private":true,
+  "scripts":{
+    "start":"node server.cjs",
+    "test":"node --test --test-isolation=none tests/import-parser.test.cjs tests/api.test.cjs tests/build-pages.test.cjs",
+    "check":"node scripts/check.cjs",
+    "build":"node scripts/build-pages.cjs",
+    "test:browser":"node tests/browser.test.cjs"
+  }
+}
