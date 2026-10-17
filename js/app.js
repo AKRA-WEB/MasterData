@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const CURRENT_VERSION = '20261006.01';
+  const CURRENT_VERSION = '20261013.03';
   const APP_ID = 'app-master-data', PORTAL = 'https://akra-web.github.io/Main/', STORAGE_KEY = 'akra_master_data_token';
   const meta = {
     products: {label:'สินค้า', singular:'สินค้า', manage:'manageProducts', import:'importProducts',
@@ -49,8 +49,8 @@
     invalid_active:'สถานะไม่ถูกต้อง กรุณาแก้ไขสถานะผ่านรายละเอียดรายการ'
   };
   function rowError(error) { const code = typeof error === 'string' ? error : error?.code; return rowErrorMessages[code] || 'ข้อมูลแถวนี้ยังใช้ไม่ได้ กรุณาตรวจค่าในไฟล์หรือจับคู่คอลัมน์ใหม่'; }
-  let session = null, authGeneration = 0, navigationGeneration = 0, listGeneration = 0, historyGeneration = 0, toastTimer, searchTimer;
-  const state = {dataset:'products', records:[], totals:{}, total:0, counts:{}, offset:0, limit:100, selected:null, savedRecord:null, search:'', status:'active', loading:false, busy:false, mode:'view', draft:null, editRecord:null, errors:{}, confirm:false, pending:null, mobileDetail:false, history:[], historyLoading:false, historyError:'', view:'catalog', import:null};
+  let session = null, accessRetry = null, authGeneration = 0, navigationGeneration = 0, listGeneration = 0, historyGeneration = 0, toastTimer, searchTimer;
+  const state = {dataset:'products', records:[], totals:{}, total:0, counts:{}, offset:0, limit:100, selected:null, savedRecord:null, search:'', status:'active', loading:false, listError:null, busy:false, mode:'view', draft:null, editRecord:null, errors:{}, confirm:false, pending:null, mobileDetail:false, history:[], historyLoading:false, historyError:'', view:'catalog', import:null};
   const api = MasterDataAPI.create(() => session, invalidate);
   const permitted = key => MasterDataAPI.hasAdminRole(session) && Boolean(session?.perms?.[APP_ID]?.includes(key));
   const canManage = dataset => permitted(meta[dataset].manage);
@@ -62,42 +62,54 @@
   function syncDirty() { if (dirty() || (state.view === 'import' && state.import?.file && state.import.step !== 4)) window.AkraModule.markDirty(); else window.AkraModule.markSaved(); }
   function toast(message) { clearTimeout(toastTimer); byId('toast').textContent = message; byId('toast').hidden = false; toastTimer = setTimeout(() => { byId('toast').hidden = true; }, 5000); }
   function message(text) { byId('app-message').textContent = text || ''; byId('app-message').hidden = !text; }
-  function invalidate(text) {
-    session = null; ++authGeneration; ++listGeneration; ++historyGeneration;
+  function invalidate(text, failure) {
+    session = null; accessRetry = null; ++authGeneration; ++listGeneration; ++historyGeneration;
     clearTimeout(searchTimer); clearTimeout(toastTimer);
-    Object.assign(state, {records:[], draft:null, editRecord:null, import:null, history:[], selected:null, savedRecord:null, totals:{}, total:0, counts:{}, offset:0, search:'', status:'active', busy:false, loading:false, mode:'view', view:'catalog', pending:null, confirm:false, errors:{}, mobileDetail:false, historyLoading:false, historyError:''});
+    Object.assign(state, {records:[], draft:null, editRecord:null, import:null, history:[], selected:null, savedRecord:null, totals:{}, total:0, counts:{}, offset:0, search:'', status:'active', busy:false, loading:false, listError:null, mode:'view', view:'catalog', pending:null, confirm:false, errors:{}, mobileDetail:false, historyLoading:false, historyError:''});
     ['record-list','detail-panel','import-view','dataset-tabs','app-message','user-name'].forEach(id => { byId(id).replaceChildren(); });
     byId('catalog-search').value = ''; byId('toast').replaceChildren(); byId('toast').hidden = true;
     byId('app-content').hidden = true; byId('session-screen').hidden = false;
-    byId('session-message').textContent = text || 'กรุณาเปิดแอปจาก Main อีกครั้ง'; byId('auth-retry').hidden = false;
+    byId('session-message').textContent = text || 'กรุณาเปิดแอปจาก Main อีกครั้ง'; byId('session-message').setAttribute('role', 'alert'); byId('auth-retry').hidden = Boolean(failure?.home);
     window.AkraModule?.stopWatchingSession?.();
   }
   async function verifyAccess() {
     const generation = ++authGeneration;
-    byId('auth-retry').hidden = true; byId('session-message').textContent = 'กำลังตรวจสอบเซสชัน Main…';
+    let attempt = null;
+    byId('auth-retry').hidden = true; byId('session-message').setAttribute('role', 'status'); byId('session-message').textContent = 'กำลังตรวจสอบเซสชัน Main…';
     try {
       const bridge = window.AkraModule;
-      if (!bridge) throw new Error('ตัวเชื่อม Main ไม่พร้อม กรุณาโหลดแอปใหม่');
+      if (!bridge) throw Object.assign(new Error('bridge_unavailable'), {code:'service_unavailable'});
       const params = new URLSearchParams(location.search), sso = params.get('sso');
       let saved = ''; try { saved = localStorage.getItem(STORAGE_KEY) || ''; } catch (_) {}
       if (sso) { params.delete('sso'); history.replaceState({}, '', `${location.pathname}${params.size ? '?' + params : ''}${location.hash}`); }
-      const token = bridge.embedded ? bridge.getToken() : sso || saved;
-      if (!token) throw new Error('กรุณาเปิดแอปนี้จาก Main เพื่อเข้าสู่ระบบ');
+      const stamp = bridge.sessionStamp?.();
+      const retryToken = accessRetry?.saved === saved && accessRetry.stamp === stamp ? accessRetry.token : '';
+      const token = bridge.embedded ? bridge.getToken() : sso || retryToken || saved;
+      if (!token) throw Object.assign(new Error('no_token'), {code:'no_token'});
+      attempt = {token, saved, stamp};
       const user = await bridge.verifySession(APP_ID, token);
       if (generation !== authGeneration) return;
-      if (!bridge.embedded) { let latest = ''; try { latest = localStorage.getItem(STORAGE_KEY) || ''; } catch (_) {} if (latest !== saved) throw new Error('เซสชันเปลี่ยนระหว่างตรวจสอบ กรุณาเปิดจาก Main อีกครั้ง'); }
-      if (!MasterDataAPI.hasAdminRole(user)) throw new Error('ข้อมูลกลางเปิดให้ใช้งานเฉพาะ ADMIN กรุณากลับ Main');
-      if (user.mustChangePassword || !user.perms?.[APP_ID]?.includes('viewMasterData')) throw new Error('คุณยังไม่มีสิทธิ์ดูข้อมูลกลาง กรุณาติดต่อผู้ดูแลใน Main');
+      if (!bridge.embedded) { let latest = ''; try { latest = localStorage.getItem(STORAGE_KEY) || ''; } catch (_) {} if (latest !== saved) throw Object.assign(new Error('session_changed'), {code:'session_changed'}); }
+      if (!MasterDataAPI.hasAdminRole(user)) throw Object.assign(new Error('permission_denied'), {code:'permission_denied'});
+      if (user.mustChangePassword || !user.perms?.[APP_ID]?.includes('viewMasterData')) throw Object.assign(new Error('permission_denied'), {code:'permission_denied'});
       const response = await fetch('version.json', {cache:'no-store'});
-      if (!response.ok || (await response.json()).version !== CURRENT_VERSION) throw new Error('แอปมีเวอร์ชั่นใหม่ กรุณาโหลดหน้านี้ใหม่ก่อนใช้งาน');
+      if (!response.ok) throw Object.assign(new Error('version_unavailable'), {status:response.status});
+      if ((await response.json()).version !== CURRENT_VERSION) throw Object.assign(new Error('app_version_changed'), {code:'app_version_changed'});
       if (generation !== authGeneration) return;
       session = {...user, token};
+      accessRetry = null;
       if (!bridge.embedded) { try { localStorage.setItem(STORAGE_KEY, token); } catch (_) {} }
       bridge.watchSession({appId:APP_ID, user:session, token, invalidated:() => invalidate('เซสชัน Main เปลี่ยนแล้ว กรุณาเปิดแอปจาก Main อีกครั้ง'), refreshed:(nextToken, nextUser) => { session = {...nextUser, token:nextToken}; if (!MasterDataAPI.hasAdminRole(session)) invalidate('ข้อมูลกลางเปิดให้ใช้งานเฉพาะ ADMIN กรุณากลับ Main'); else if (!permitted('viewMasterData')) invalidate('สิทธิ์ดูข้อมูลกลางเปลี่ยนแล้ว กรุณาเปิดจาก Main อีกครั้ง'); else { render(); loadList(); } }});
       byId('user-name').textContent = user.name || 'ผู้ใช้งาน'; byId('app-version').textContent = CURRENT_VERSION;
       byId('session-screen').hidden = true; byId('app-content').hidden = false;
       state.dataset = hashDataset() || 'products'; render(); await loadList();
-    } catch (error) { if (generation === authGeneration) invalidate(error.message || 'ตรวจสอบเซสชันไม่สำเร็จ กรุณาเปิดจาก Main อีกครั้ง'); }
+    } catch (error) {
+      if (generation !== authGeneration) return;
+      const failure = error.code === 'app_version_changed' ? {title:'แอปมีเวอร์ชั่นใหม่', body:'กรุณาโหลดหน้านี้ใหม่ก่อนใช้งาน', home:true} : listFailure(error);
+      invalidate(`${failure.title} · ${failure.body}`, failure);
+      if (!failure.home) accessRetry = attempt;
+      if (failure.session) window.AkraModule?.authRequired?.(PORTAL);
+    }
   }
   const hashDataset = () => Object.keys(meta).find(dataset => location.hash === '#tab-' + dataset);
   function renderTabs() {
@@ -107,12 +119,18 @@
   }
   function renderList() {
     byId('record-list').setAttribute('aria-busy', String(state.loading));
-    byId('list-count').textContent = state.loading ? 'กำลังโหลดรายการ…' : `แสดง ${number(state.records.length ? state.offset + 1 : 0)}–${number(state.offset + state.records.length)} จาก ${number(state.total)} รายการ`;
+    byId('list-count').textContent = state.loading ? 'กำลังโหลดรายการ…' : state.listError ? 'โหลดรายการไม่สำเร็จ' : `แสดง ${number(state.records.length ? state.offset + 1 : 0)}–${number(state.offset + state.records.length)} จาก ${number(state.total)} รายการ`;
     byId('source-caption').textContent = `ใช้งานอยู่ ${number(state.counts.active)} · ปิดใช้งาน ${number(state.counts.inactive)}`;
     byId('page-number').textContent = `หน้า ${Math.floor(state.offset / state.limit) + 1}`;
     document.querySelector('[data-action="previous-page"]').disabled = state.loading || !state.offset;
     document.querySelector('[data-action="next-page"]').disabled = state.loading || state.offset + state.limit >= state.total;
     if (state.loading) { byId('record-list').innerHTML = '<div class="list-skeleton" role="status"><span>กำลังโหลดข้อมูล</span><div></div><div></div><div></div></div>'; return; }
+    let notice = '';
+    if (state.listError) {
+      const error = state.listError, retained = state.records.length && !error.home;
+      notice = `<div class="empty-state list-error${retained ? ' list-error-notice' : ''}" role="alert"><h3>${esc(error.title)}</h3><p>${esc(error.body)}</p>${retained ? '<p>แสดงข้อมูลที่โหลดสำเร็จครั้งก่อน</p>' : ''}<button class="button button-secondary" type="button" data-action="${error.home ? 'home' : 'reload'}">${error.home ? 'กลับหน้าหลัก' : 'ลองอีกครั้ง'}</button></div>`;
+      if (!retained) { byId('record-list').innerHTML = notice; return; }
+    }
     if (!state.records.length) { byId('record-list').innerHTML = `<div class="empty-state">${icon('search')}<h3>${state.search ? 'ไม่พบรายการที่ตรงกัน' : 'ยังไม่มีรายการในสถานะนี้'}</h3><p>ลองค้นหาด้วยรหัสหรือชื่อ เปลี่ยนสถานะ หรือเพิ่มรายการใหม่เมื่อมีสิทธิ์</p><button class="button button-secondary" type="button" data-action="reset-search">ล้างการค้นหาและตัวกรอง</button><button class="button button-subtle" type="button" data-action="reload">โหลดข้อมูลอีกครั้ง</button></div>`; return; }
     const product = state.dataset === 'products', vendor = state.dataset === 'vendors';
     const columns = product ? ['รหัสสินค้า','ชื่อสินค้า / ชื่อรอง','หมวดหมู่','หน่วย','สถานะ'] : vendor ? ['รหัส','ชื่อ Vendor','ข้อมูลติดต่อ','สถานะ'] : ['รหัสสมาชิก','ชื่อสมาชิก / ลูกค้า','เบอร์โทรศัพท์','สถานะ'];
@@ -123,7 +141,7 @@
       const values = product ? [code,name,esc(record.category || '—'),esc(record.unit || '—'),status] : [code,name,esc(record.phone || record.email || 'ยังไม่ระบุ'),status];
       return `<tr class="${state.selected === record.id ? 'selected' : ''}" data-action="select" data-id="${esc(record.id)}">${values.map(value => `<td>${value}</td>`).join('')}</tr>`;
     }).join('');
-    byId('record-list').innerHTML = `<table class="record-table ${product ? 'product' : vendor ? 'vendor' : 'member'}-table"><thead><tr>${columns.map(label => `<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+    byId('record-list').innerHTML = notice + `<table class="record-table ${product ? 'product' : vendor ? 'vendor' : 'member'}-table"><thead><tr>${columns.map(label => `<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
   }
   function fieldControl(key, label, required) {
     if (optionalLegacyCode(key)) required = false;
@@ -168,7 +186,7 @@
   async function loadList() {
     if (!session) return;
     const generation = ++listGeneration, dataset = state.dataset;
-    state.loading = true; message(''); render();
+    state.loading = true; state.listError = null; message(''); render();
     try {
       const result = await api.request('list', {dataset, search:state.search, status:state.status, offset:state.offset, limit:state.limit});
       if (generation !== listGeneration || !session) return;
@@ -176,7 +194,29 @@
       if (state.records.some(record => record.id === state.selected)) state.savedRecord = null;
       else if (state.savedRecord?.id !== state.selected) state.selected = state.records[0]?.id || null;
       state.loading = false; render(); loadHistory();
-    } catch (error) { if (generation !== listGeneration || !session) return; state.loading = false; state.records = []; state.total = 0; render(); message(error.message); }
+    } catch (error) {
+      if (generation !== listGeneration || !session) return;
+      if (error.code === 'session_changed') { const failure = listFailure(error); invalidate(`${failure.title} · ${failure.body}`, failure); window.AkraModule?.authRequired?.(PORTAL); return; }
+      state.loading = false; state.listError = listFailure(error); render();
+    }
+  }
+  function listFailure(error) {
+    const reason = error.code || error.reason || error.message;
+    const sessionFailure = {title:'เซสชันหมดอายุหรือเปลี่ยนแล้ว', body:'เข้าสู่ระบบ BUYMORETH อีกครั้ง', home:true, session:true};
+    const permissionFailure = {title:'ไม่มีสิทธิ์ใช้ส่วนนี้', body:'ติดต่อผู้ดูแลใน BUYMORETH เพื่อขอสิทธิ์', home:true};
+    const networkFailure = {title:'เชื่อมต่อไม่ได้', body:'ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง'};
+    const serverFailure = {title:'ระบบขัดข้องชั่วคราว', body:'ลองอีกครั้งในอีกสักครู่ ถ้ายังไม่ได้ให้แจ้งผู้ดูแล'};
+    if (['invalid_or_expired_token','invalid_session','session_changed','session_revoked','session_expired','main_signed_out','no_token','missing_token','shell_session_unavailable'].includes(reason)) return sessionFailure;
+    if (['stale_record','stale_review','review_expired','duplicate_code'].includes(reason)) return {title:'โหลดข้อมูลไม่สำเร็จ', body:error.message};
+    if (reason === 'permission_denied') return permissionFailure;
+    if (['network_error','request_timeout','session_verify_timeout'].includes(reason)) return networkFailure;
+    if (['internal_error','service_unavailable'].includes(reason)) return serverFailure;
+    if (error.status === 401) return sessionFailure;
+    if (error.status === 403) return permissionFailure;
+    if (error.status >= 500) return serverFailure;
+    if (error.name === 'AbortError' || error.name === 'TypeError') return networkFailure;
+    if (error.status === 429) return {title:'โหลดข้อมูลไม่สำเร็จ', body:'มีคำขอจำนวนมาก กรุณารอสักครู่แล้วลองอีกครั้ง'};
+    return {title:'โหลดข้อมูลไม่สำเร็จ', body:'ลองโหลดรายการอีกครั้ง'};
   }
   async function loadHistory() {
     const record = current(), generation = ++historyGeneration;

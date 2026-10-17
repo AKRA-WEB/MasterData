@@ -17,3 +17,34 @@
 .session-screen{max-width:560px;margin:10vh auto;padding:32px;background:var(--white);border:1px solid var(--line);border-radius:var(--radius)}.session-screen h1{font-size:25px;margin-bottom:16px}.session-screen p{margin-bottom:24px}.session-screen .button{margin-right:8px;text-decoration:none;display:inline-flex}.sidebar nav button{background:none;border:0;text-align:left;width:100%}.sidebar nav button:hover{background:#24365b}.app-message{background:var(--red-soft);color:var(--red);padding:14px 18px;margin-bottom:20px;border:1px solid #f0cbd0;border-radius:8px}.list-skeleton{padding:24px}.list-skeleton span{color:var(--muted);font-size:12px}.list-skeleton div{height:42px;background:#edf1f6;border-radius:6px;margin-top:12px}.pagination{display:flex;align-items:center;gap:8px}.pagination .button{font-size:11px;min-height:36px;padding:6px 9px}.source-controls{display:flex;gap:20px;margin:20px 0}.source-controls label{display:grid;gap:6px;font-size:12px;flex:1;min-width:0}.source-controls input,.source-controls select{width:100%;min-height:44px;border:1px solid #cad3e0;border-radius:6px;padding:9px;background:#fff;color:var(--ink)}.file-picker{display:grid;gap:12px;margin:24px 0 12px;font-size:13px}.file-picker input{padding:18px;background:var(--canvas);border:1px solid #cad3e0;border-radius:8px;width:100%;color:var(--ink)}.file-picker input::file-selector-button{background:var(--white);color:var(--ink);border:1px solid #cad3e0;border-radius:6px;padding:10px;margin-right:14px;font:inherit;cursor:pointer}.detail-form textarea{width:100%;min-height:100px;padding:10px;border:1px solid #cad3e0;border-radius:6px;background:#fff;resize:vertical;color:var(--ink);font:inherit}.import-error{margin-top:24px;background:var(--red-soft);padding:14px;border-radius:8px;overflow-wrap:anywhere}.binding-choice{background:var(--blue-soft);padding:16px;border-radius:8px;margin:20px 0}.binding-choice p{font-size:12px;margin-bottom:12px}.history p{font-size:11px;color:var(--muted)}.history .field-error{color:var(--red)}.import-body>p{max-width:70ch}.review-table .button{font-size:11px;margin-top:10px;max-width:100%;white-space:normal}.detail-field dd{white-space:pre-wrap;overflow-wrap:anywhere}.app-shell{min-width:0}.record-table td{overflow-wrap:anywhere}.file-picker,.source-controls,.mapping-scroll{min-width:0}body:has(.sidebar[hidden]) .app-shell{margin-left:0}.detail-form input[readonly]{background:#f1f4f8;color:var(--muted)}
 @media(max-width:680px){.session-screen{margin:20px 16px;padding:24px}.source-controls{flex-direction:column;gap:12px}.source-controls input,.source-controls select,.file-picker input,.detail-form textarea{font-size:16px}.list-footer .pagination{align-self:stretch;justify-content:space-between}.binding-choice .button{width:100%;white-space:normal}.sidebar-footer{font-size:12px}.review-table .button{font-size:12px}.workspace-bar>.button{font-size:11px;padding:6px 9px}.file-picker input{padding:10px}.file-picker input::file-selector-button{margin-right:8px;padding:9px}.source-controls{margin:16px 0}}
 body.master-data-embedded .app-shell{margin-left:0}body.master-data-embedded .sidebar{display:none}
+/* Detail fields remain available while the desktop list prioritizes names. */
+.list-error-notice{padding:16px 18px;text-align:left;border-bottom:1px solid var(--line)}.list-error-notice .button{margin-top:12px}
+@media(min-width:1051px){.product-table th:nth-child(3),.product-table td:nth-child(3),.product-table th:nth-child(4),.product-table td:nth-child(4){display:none}.product-table th:first-child{width:20%}.product-table th:nth-child(2){width:60%}.product-table th:nth-child(5){width:20%}.vendor-table th:nth-child(2),.member-table th:nth-child(2){width:44%}}
+@media(max-width:680px){.dataset-tabs{overflow-x:auto;justify-content:flex-start;gap:24px;scroll-padding-inline:2px}.dataset-tab{flex-shrink:0;min-width:max-content}.dataset-tab .tab-label,.dataset-tab .tab-total{white-space:nowrap}}
+/* Audited DATA catalog/detail/import supporting roles. Keep the existing font and colors. */
+#app-content :is(.workspace-location > span:last-child,.brand small,.sidebar-section,
+ .sidebar .akra-global-switcher__brand-copy small,.sidebar .akra-global-switcher__heading,
+ .dataset-tab .tab-total,.list-context,.record-table th,.record-subname,.code-text,.record-code-button,
+ .status-badge,.list-footer,.pagination .button,.detail-topline,.detail-subtitle,.detail-field dt,
+ .detail-help,.history h3,.history li,.history small,.history p,.field-hint,.field-error,.form-field label,
+ .deactivate-button,.workspace-footer,.inline-confirm,.inline-confirm p,.inline-confirm .button,
+ .import-top .button,.import-steps li,.step-number,.import-dataset small,.sample-file p,.sample-file .filename,
+ .import-footnote,.mapping-table th,.mapping-table td,.mapping-table select,.mapping-note,
+ .review-table th,.review-table td,.review-summary,.review-summary span,.skip-errors,.skip-errors small,
+ .result-totals span,.import-diff,.import-diff-label,.import-diff-values > div > span,.import-diff-values p,
+ .review-table .button,.import-no-changes) { font-size:12px; line-height:1.6; }
+#app-content :is(.record-table,.record-table td,.record-table .record-name,.detail-field dd) { font-size:14px; }
+#app-content .record-table .record-name { line-height:1.6; overflow-wrap:anywhere; }
+#app-content .search-key { color:var(--muted); font-size:12px; }
+#app-content .list-context { flex-wrap:wrap; gap:4px 12px; }
+#app-content .import-steps { flex-wrap:wrap; gap:12px; }
+#app-content .import-top { gap:12px; }
+#app-content .import-top .button { white-space:normal; }
+#akra-global-app-switcher :is(.akra-global-switcher__brand-copy small,.akra-global-switcher__heading) { font-size:12px; line-height:1.6; }
+@media(max-width:1050px) { #app-content .sidebar > nav > * { font-size:12px; } }
+@media(max-width:680px) {
+ #app-content .import-steps { flex-wrap:nowrap; gap:6px; align-items:flex-start; }
+ #app-content .import-steps li { min-width:0; flex:1; text-align:center; overflow-wrap:anywhere; }
+ #app-content .record-table td:nth-child(5) { max-width:120px; font-size:12px; }
+ #app-content .workspace-bar > .button { font-size:12px; }
+}

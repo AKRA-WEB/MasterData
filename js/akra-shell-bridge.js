@@ -510,14 +510,17 @@
                         ...(controller ? {signal:controller.signal} : {}),
                         body:JSON.stringify({action:'verifyToken',appId,token})
                     });
-                    return {response:nextResponse,result:await nextResponse.json()};
+                    return {response:nextResponse,result:await nextResponse.json().catch(() => ({}))};
                 })();
                 ({response, result} = await Promise.race([request, timeout]));
             } finally {
                 clearTimeout(timeoutId);
             }
             if (!shell && stamp !== sessionStamp()) throw new Error('session_changed');
-            if (!response.ok || result.valid !== true || !result.user?.id) throw new Error(result.reason || 'invalid_session');
+            if (!response.ok || result?.valid !== true || !result?.user?.id) {
+                const reason = result?.reason || (response.status >= 500 ? 'internal_error' : response.status === 403 ? 'permission_denied' : response.status === 429 ? 'rate_limited' : 'invalid_session');
+                throw Object.assign(new Error(reason), {code:reason, reason, status:response.status});
+            }
             return result.user;
         },
         home: fallback => { if (shell) send('home'); else window.location.assign(fallback); },
