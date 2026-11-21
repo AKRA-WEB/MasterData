@@ -9,7 +9,7 @@
     code: ['product code', 'sku', 'code', 'customer id', 'รหัสสินค้า', 'รหัส vendor', 'รหัสสมาชิก'],
     name: ['product name', 'vendor name', 'name', 'customer name', 'ชื่อสินค้า', 'ชื่อ vendor', 'ชื่อสมาชิก'],
     subname: ['product subname', 'subname', 'ชื่อรอง'], category: ['category', 'หมวดหมู่'], unit: ['unit', 'หน่วย'],
-    barcode: ['custom barcode id', 'barcode', 'บาร์โค้ด'], contact_name: ['contact name', 'contact person', 'ผู้ติดต่อ'],
+    barcode: ['custom barcode id', 'barcode', 'บาร์โค้ด'], price: ['price', 'selling price', 'ราคาสินค้า', 'ราคาขาย'], contact_name: ['contact name', 'contact person', 'ผู้ติดต่อ'],
     phone: ['phone number', 'phone', 'เบอร์โทรศัพท์'], email: ['email', 'อีเมล'], address: ['address', 'ที่อยู่'],
     tax_id: ['tax id', 'เลขผู้เสียภาษี'], company: ['company name', 'company', 'ชื่อบริษัท']
   };
@@ -71,6 +71,14 @@
     return {...fromWorkbook(workbook, XLSX), name:file.name};
   }
   const text = cell => String(cell?.w ?? cell?.v ?? '').trim();
+  function parsePrice(value) {
+    const input = String(value ?? '').trim();
+    if (!input) return null;
+    if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(input)) throw new Error('ราคาต้องเป็นตัวเลขตั้งแต่ 0 และมีทศนิยมไม่เกิน 2 ตำแหน่ง');
+    const price = Number(input.replace(/,/g, ''));
+    if (!Number.isFinite(price) || price > 999999999999.99) throw new Error('ราคาสูงเกินขอบเขตที่รองรับ');
+    return price;
+  }
   function headers(sheet, headerRow) {
     const row = sheet.rows[headerRow - 1] || [];
     return row.map((cell, index) => ({index:String(index), label:text(cell) || `คอลัมน์ ${index + 1}`, excluded:forbiddenHeader(text(cell))}));
@@ -109,6 +117,15 @@
         }
         const cell = cells[Number(column)];
         record[key] = text(cell);
+        if (key === 'price') {
+          if (cell?.f) throw new Error(`แถว ${index + 1}: ราคาเป็นสูตร กรุณาแปลงเป็นค่าตัวเลขก่อนนำเข้า`);
+          const value = cell?.t === 'n' ? cell.v : record[key];
+          try { record.price = parsePrice(value); }
+          catch (_) { record.price = String(value ?? ''); } // Server returns an invalid_price row without rounding the source.
+        }
+        if (key === 'barcode' && (cell?.f || (cell?.t === 'n' && (!Number.isSafeInteger(cell.v) || cell.v < 0 || /[eE][+-]?\d/.test(record[key]))))) {
+          throw new Error(`แถว ${index + 1}: บาร์โค้ดเป็นสูตรหรือตัวเลขที่อาจสูญเสียความแม่นยำ กรุณาเก็บบาร์โค้ดเป็นข้อความในไฟล์`);
+        }
         if (key === 'code' && (cell?.f || (cell?.t === 'n' && (!Number.isSafeInteger(cell.v) || cell.v < 0 || /[eE][+-]?\d/.test(record[key]))))) {
           record.code = '';
           issues.push(cell?.f ? 'รหัสเป็นสูตร กรุณาแปลงเป็นข้อความในไฟล์' : 'รหัสเป็นตัวเลขที่อาจสูญเสียความแม่นยำ กรุณาแก้เป็นข้อความในไฟล์');
@@ -122,5 +139,5 @@
     if (mapped.length > MAX_ROWS) throw new Error('รองรับครั้งละ 10,000 รายการ กรุณาแบ่งไฟล์');
     return {rows:mapped, notes};
   }
-  return {MAX_ROWS, MAX_FILE_BYTES, parseCSV, fromWorkbook, readFile, headers, suggestHeader, suggestMapping, mappedRows, forbiddenHeader};
+  return {MAX_ROWS, MAX_FILE_BYTES, parseCSV, fromWorkbook, readFile, headers, suggestHeader, suggestMapping, mappedRows, forbiddenHeader, parsePrice};
 }));

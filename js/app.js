@@ -1,10 +1,10 @@
 (function () {
   'use strict';
-  const CURRENT_VERSION = '20261019.01';
+  const CURRENT_VERSION = '20261121.01';
   const APP_ID = 'app-master-data', PORTAL = 'https://akra-web.github.io/Main/', STORAGE_KEY = 'akra_master_data_token';
   const meta = {
     products: {label:'สินค้า', singular:'สินค้า', manage:'manageProducts', import:'importProducts',
-      fields:[['code','รหัสสินค้า (SKU)',true],['name','ชื่อสินค้า',true],['subname','ชื่อรอง'],['category','หมวดหมู่'],['unit','หน่วย',true],['barcode','บาร์โค้ด']],
+      fields:[['code','รหัสสินค้า (SKU)',true],['name','ชื่อสินค้า',true],['subname','ชื่อรอง'],['category','หมวดหมู่'],['unit','หน่วย',true],['price','ราคาขาย (บาท/หน่วย)'],['barcode','บาร์โค้ด']],
       note:'ไฟล์สินค้าไม่มีความสัมพันธ์ Vendor ระบบจะไม่เดา Vendor จากชื่อสินค้า'},
     vendors: {label:'Vendor', singular:'Vendor', manage:'manageVendors', import:'importVendors',
       fields:[['code','รหัส Vendor',true],['name','ชื่อ Vendor',true],['contact_name','ชื่อผู้ติดต่อ'],['phone','เบอร์โทรศัพท์'],['email','อีเมล'],['address','ที่อยู่'],['tax_id','เลขผู้เสียภาษี']],
@@ -44,11 +44,16 @@
     invalid_subname:'ชื่อรองยาวเกินไป กรุณาลดความยาวในไฟล์',
     invalid_category:'หมวดหมู่ยาวเกินไป กรุณาลดความยาวในไฟล์',
     invalid_barcode:'บาร์โค้ดยาวเกินไป กรุณาตรวจค่าในไฟล์',
+    invalid_price:'ราคาต้องเป็นตัวเลขตั้งแต่ 0 ไม่เกิน 999,999,999,999.99 และมีทศนิยมไม่เกิน 2 ตำแหน่ง',
     invalid_company:'ชื่อบริษัทยาวเกินไป กรุณาลดความยาวในไฟล์',
     value_too_long:'ข้อความยาวเกินไป กรุณาลดความยาวในไฟล์',
     invalid_active:'สถานะไม่ถูกต้อง กรุณาแก้ไขสถานะผ่านรายละเอียดรายการ'
   };
   function rowError(error) { const code = typeof error === 'string' ? error : error?.code; return rowErrorMessages[code] || 'ข้อมูลแถวนี้ยังใช้ไม่ได้ กรุณาตรวจค่าในไฟล์หรือจับคู่คอลัมน์ใหม่'; }
+  function displayField(key, value) {
+    if (value == null || value === '') return 'ยังไม่ระบุ';
+    return key === 'price' ? Number(value).toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' บาท' : value;
+  }
   let session = null, accessRetry = null, authGeneration = 0, navigationGeneration = 0, listGeneration = 0, historyGeneration = 0, toastTimer, searchTimer;
   const state = {dataset:'products', records:[], totals:{}, total:0, counts:{}, offset:0, limit:100, selected:null, savedRecord:null, search:'', status:'active', loading:false, listError:null, busy:false, mode:'view', draft:null, editRecord:null, errors:{}, confirm:false, pending:null, mobileDetail:false, history:[], historyLoading:false, historyError:'', view:'catalog', import:null};
   const api = MasterDataAPI.create(() => session, invalidate);
@@ -145,10 +150,12 @@
   }
   function fieldControl(key, label, required) {
     if (optionalLegacyCode(key)) required = false;
-    const value = state.draft?.[key] || '', error = state.errors[key], locked = key === 'code' && state.mode === 'edit' && current()?.code;
+    const value = state.draft?.[key] ?? '', error = state.errors[key], locked = key === 'code' && state.mode === 'edit' && current()?.code;
     const id = 'field-' + key, max = key === 'code' ? 200 : key === 'address' ? 4000 : key === 'email' ? 254 : key === 'unit' ? 100 : 1000;
     let hint = locked ? 'รหัสเป็นตัวระบุรายการ จึงแก้ไขไม่ได้' : optionalLegacyCode(key) ? 'Vendor เดิมยังไม่มีรหัส เว้นว่างไว้ได้ เมื่อกำหนดรหัสแล้วจะแก้รหัสไม่ได้' : key === 'code' ? state.dataset === 'members' ? 'ใช้รหัสเดิมจาก POS และเก็บเลขศูนย์ด้านหน้า' : 'กำหนดรหัสที่ไม่ซ้ำ เมื่อบันทึกแล้วแก้รหัสไม่ได้' : required ? 'จำเป็นต้องระบุ' : 'ไม่บังคับ';
-    const control = key === 'address' ? `<textarea id="${id}" name="${key}" maxlength="${max}" rows="3" ${state.busy ? 'disabled' : ''} aria-describedby="${id}-hint">${esc(value)}</textarea>` : `<input id="${id}" name="${key}" value="${esc(value)}" maxlength="${max}" type="${key === 'email' ? 'email' : 'text'}" ${state.busy ? 'disabled' : ''} ${locked ? 'readonly aria-readonly="true"' : ''} ${key === 'phone' ? 'inputmode="tel"' : ''} ${key === 'code' ? 'autocomplete="off"' : ''} ${error ? 'aria-invalid="true"' : ''} aria-describedby="${id}-hint${error ? ' ' + id + '-error' : ''}">`;
+    if (key === 'price') hint = 'ราคาขายต่อหน่วยสินค้านี้ ใส่ 0 ได้ และมีทศนิยมไม่เกิน 2 ตำแหน่ง';
+    if (key === 'barcode') hint = 'เก็บเป็นข้อความเพื่อรักษาเลขศูนย์ด้านหน้า';
+    const control = key === 'address' ? `<textarea id="${id}" name="${key}" maxlength="${max}" rows="3" ${state.busy ? 'disabled' : ''} aria-describedby="${id}-hint">${esc(value)}</textarea>` : `<input id="${id}" name="${key}" value="${esc(value)}" maxlength="${max}" type="${key === 'email' ? 'email' : 'text'}" ${state.busy ? 'disabled' : ''} ${locked ? 'readonly aria-readonly="true"' : ''} ${key === 'phone' ? 'inputmode="tel"' : key === 'price' ? 'inputmode="decimal"' : ''} ${key === 'code' || key === 'barcode' ? 'autocomplete="off"' : ''} ${error ? 'aria-invalid="true"' : ''} aria-describedby="${id}-hint${error ? ' ' + id + '-error' : ''}">`;
     return `<div class="form-field" data-name="${key}"><label for="${id}">${label}${required ? '<span class="required" aria-hidden="true">*</span>' : ''}</label>${control}<span class="field-hint" id="${id}-hint">${hint}</span>${error ? `<span id="${id}-error" class="field-error" role="alert">${esc(error)}</span>` : ''}</div>`;
   }
   function renderHistory() {
@@ -172,7 +179,7 @@
     }
     if (!record) { panel.innerHTML = `${back}<div class="empty-detail"><h2>เลือกรายการเพื่อดูรายละเอียด</h2><p>คลิกที่รหัสหรือแถวในรายการด้านซ้าย</p></div>`; return; }
     const statusConfirm = state.confirm ? `<div class="inline-confirm" role="alert"><strong>${record.active ? 'ปิดใช้งานรายการนี้?' : 'เปิดใช้งานรายการนี้อีกครั้ง?'}</strong><p>รายการและประวัติเดิมจะยังอยู่ในระบบ</p><div class="form-actions"><button class="button button-secondary" data-action="cancel-status" ${state.busy ? 'disabled' : ''}>ยกเลิก</button><button class="button button-primary" data-action="confirm-status" ${state.busy ? 'disabled' : ''}>${state.busy ? 'กำลังบันทึก…' : 'ยืนยัน' + (record.active ? 'ปิด' : 'เปิด') + 'ใช้งาน'}</button></div></div>` : '';
-    panel.innerHTML = `${back}<div class="detail-topline"><span>รายละเอียด${item.singular}</span><span class="status-badge ${record.active ? '' : 'inactive'}">${record.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</span></div><div class="detail-icon">${icon(state.dataset)}</div><h2>${esc(record.name)}</h2><p class="detail-subtitle">${esc(record.code || 'ยังไม่ได้กำหนดรหัส')}</p>${canManage(state.dataset) ? '<button class="button button-secondary detail-primary-action" data-action="edit-record">แก้ไขรายละเอียด</button>' : '<p class="detail-help">คุณมีสิทธิ์ดูรายการนี้ หากต้องการแก้ไขให้ติดต่อผู้ดูแลใน Main</p>'}<dl class="detail-info">${fields().map(([key,label]) => `<div class="detail-field"><dt>${label}</dt><dd>${esc(record[key] || 'ยังไม่ระบุ')}</dd></div>`).join('')}${state.dataset === 'products' ? `<div class="detail-field"><dt>Vendor เดิม</dt><dd>${esc(record.vendor || 'ยังไม่ระบุ')}</dd></div>` : ''}</dl><p class="detail-help">${esc(item.note)}</p>${renderHistory()}${canManage(state.dataset) ? `<button class="deactivate-button" data-action="toggle-status">${record.active ? 'ปิดใช้งานรายการนี้' : 'เปิดใช้งานอีกครั้ง'}</button>` : ''}${statusConfirm}${pending}`;
+    panel.innerHTML = `${back}<div class="detail-topline"><span>รายละเอียด${item.singular}</span><span class="status-badge ${record.active ? '' : 'inactive'}">${record.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</span></div><div class="detail-icon">${icon(state.dataset)}</div><h2>${esc(record.name)}</h2><p class="detail-subtitle">${esc(record.code || 'ยังไม่ได้กำหนดรหัส')}</p>${canManage(state.dataset) ? '<button class="button button-secondary detail-primary-action" data-action="edit-record">แก้ไขรายละเอียด</button>' : '<p class="detail-help">คุณมีสิทธิ์ดูรายการนี้ หากต้องการแก้ไขให้ติดต่อผู้ดูแลใน Main</p>'}<dl class="detail-info">${fields().map(([key,label]) => `<div class="detail-field"><dt>${label}</dt><dd>${esc(displayField(key, record[key]))}</dd></div>`).join('')}${state.dataset === 'products' ? `<div class="detail-field"><dt>Vendor เดิม</dt><dd>${esc(record.vendor || 'ยังไม่ระบุ')}</dd></div>` : ''}</dl><p class="detail-help">${esc(item.note)}</p>${renderHistory()}${canManage(state.dataset) ? `<button class="deactivate-button" data-action="toggle-status">${record.active ? 'ปิดใช้งานรายการนี้' : 'เปิดใช้งานอีกครั้ง'}</button>` : ''}${statusConfirm}${pending}`;
   }
   function render() {
     if (!session) return;
@@ -247,9 +254,13 @@
   }
   async function saveRecord(event) {
     event.preventDefault(); if (state.busy || !canManage(state.dataset)) return;
-    const values = Object.fromEntries(fields().map(([key]) => [key,String(state.draft[key] || '').trim()]));
+    const values = Object.fromEntries(fields().map(([key]) => [key,String(state.draft[key] ?? '').trim()]));
     const errors = {}; fields().forEach(([key,label,required]) => { if (required && !optionalLegacyCode(key) && !values[key]) errors[key] = 'กรุณาระบุ' + label; });
     if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'กรุณาตรวจรูปแบบอีเมล';
+    if (state.dataset === 'products') {
+      try { values.price = MasterDataImport.parsePrice(values.price); }
+      catch (_) { errors.price = rowErrorMessages.invalid_price; }
+    }
     state.errors = errors; state.draft = values;
     if (Object.keys(errors).length) { renderDetail(); byId('field-' + Object.keys(errors)[0]).focus(); return; }
     const adding = state.mode === 'add', record = current(), generation = authGeneration, navigation = navigationGeneration;
@@ -319,7 +330,7 @@
     if (action === 'dataset') navigate({kind:'dataset', dataset:target.dataset.dataset});
     if (action === 'select') navigate({kind:'select', id:target.dataset.id});
     if (action === 'back-list') navigate({kind:'back'});
-    if (action === 'edit-record' && canManage(state.dataset)) { state.editRecord = {...current()}; state.mode = 'edit'; state.draft = Object.fromEntries(fields().map(([key]) => [key,current()[key] || ''])); state.errors = {}; state.confirm = false; renderDetail(); byId('field-name').focus(); }
+    if (action === 'edit-record' && canManage(state.dataset)) { state.editRecord = {...current()}; state.mode = 'edit'; state.draft = Object.fromEntries(fields().map(([key]) => [key,current()[key] ?? ''])); state.errors = {}; state.confirm = false; renderDetail(); byId('field-name').focus(); }
     if (action === 'cancel-edit') navigate({kind:'back'});
     if (action === 'keep-editing') { state.pending = null; renderDetail(); }
     if (action === 'discard-and-go') runNavigation(state.pending);
