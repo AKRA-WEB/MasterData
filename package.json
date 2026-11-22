@@ -4,7 +4,7 @@
   "private":true,
   "scripts":{
     "start":"node server.cjs",
-    "test":"node --test --test-isolation=none tests/import-parser.test.cjs tests/price-barcode.test.cjs tests/api.test.cjs tests/import-review.test.cjs tests/build-pages.test.cjs",
+    "test":"node --test --test-isolation=none tests/import-parser.test.cjs tests/price-barcode.test.cjs tests/api.test.cjs tests/import-review.test.cjs tests/build-pages.test.cjs tests/new-products-week.test.cjs tests/list-load-state.test.cjs",
     "check":"node scripts/check.cjs",
     "build":"node scripts/build-pages.cjs",
     "test:browser":"node tests/browser.test.cjs"

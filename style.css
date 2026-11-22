@@ -48,3 +48,5 @@ body.master-data-embedded .app-shell{margin-left:0}body.master-data-embedded .si
  #app-content .record-table td:nth-child(5) { max-width:120px; font-size:12px; }
  #app-content .workspace-bar > .button { font-size:12px; }
 }
+
+.product-week-filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:0 20px 16px}.product-week-filter[hidden]{display:none}.product-week-filter label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600}.product-week-filter input{width:18px;height:18px;accent-color:var(--accent,#1b6b50)}.product-week-filter>span{font-size:12px;color:var(--muted,#647069)}.record-added-date{display:block;margin-top:6px;font-size:12px;color:var(--muted,#647069)}
