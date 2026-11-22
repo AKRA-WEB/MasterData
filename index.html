@@ -6,12 +6,12 @@
   <meta name="color-scheme" content="light">
   <meta name="referrer" content="no-referrer">
   <title>ข้อมูลกลาง · BUYMORETH</title>
-  <link rel="stylesheet" href="style.css?v=20261013.02">
+  <link rel="stylesheet" href="style.css?v=20261122.01">
   <script src="js/akra-shell-bridge.js?v=20261013.03"></script>
   <script src="assets/vendor/xlsx-0.20.3.full.min.js" defer></script>
-  <script src="js/import-parser.js?v=20261121.01" defer></script>
+  <script src="js/import-parser.js?v=20261122.01" defer></script>
   <script src="js/api.js" defer></script>
-  <script src="js/app.js?v=20261121.01" defer></script>
+  <script src="js/app.js?v=20261122.01" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">ข้ามไปเนื้อหา</a>
@@ -37,6 +37,7 @@
           <div class="catalog-grid" id="catalog-grid">
             <section class="list-surface" aria-label="รายการข้อมูลกลาง">
               <div class="list-toolbar"><label class="search-control" for="catalog-search"><span id="search-icon" aria-hidden="true"></span><input type="search" id="catalog-search" placeholder="ค้นหารหัสหรือชื่อ…" autocomplete="off"><span class="search-key" aria-hidden="true">/</span></label><label class="status-control"><span class="sr-only">กรองสถานะ</span><select id="status-filter"><option value="active">ใช้งานอยู่</option><option value="all">ทุกสถานะ</option><option value="inactive">ปิดใช้งาน</option></select></label></div>
+              <div class="product-week-filter" id="product-week-filter"><label><input type="checkbox" id="created-this-week" aria-describedby="creation-window">สินค้าเพิ่มใหม่สัปดาห์นี้</label><span id="creation-window" aria-live="polite">จันทร์–อาทิตย์ · เวลาไทย · ตามวันที่เพิ่มเข้าระบบ</span></div>
               <div class="list-context"><span id="list-count"></span><span>คลิกแถวเพื่อดูรายละเอียด</span></div>
               <div id="record-list" aria-live="polite"></div>
               <div class="list-footer"><span id="source-caption"></span><div class="pagination"><button class="button button-subtle" type="button" data-action="previous-page">ก่อนหน้า</button><span id="page-number"></span><button class="button button-subtle" type="button" data-action="next-page">ถัดไป</button></div></div>

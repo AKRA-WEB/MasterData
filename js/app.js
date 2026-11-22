@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const CURRENT_VERSION = '20261121.01';
+  const CURRENT_VERSION = '20261122.01';
   const APP_ID = 'app-master-data', PORTAL = 'https://akra-web.github.io/Main/', STORAGE_KEY = 'akra_master_data_token';
   const meta = {
     products: {label:'สินค้า', singular:'สินค้า', manage:'manageProducts', import:'importProducts',
@@ -17,6 +17,23 @@
   const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[key] || paths.products}</svg>`;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const byId = id => document.getElementById(id), number = value => Number(value || 0).toLocaleString('en-US');
+  const addedDate = value => {
+    const date = value ? new Date(value) : null;
+    return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('th-TH', {timeZone:'Asia/Bangkok', day:'numeric', month:'short', year:'numeric'}).format(date) : 'ไม่ทราบวันที่';
+  };
+  function validCreationWindow(result) {
+    const window = result.creationWindow;
+    if (!window || window.timezone !== 'Asia/Bangkok') return false;
+    const [start,end,asOf] = [window.startAt,window.endAt,window.asOf].map(value => Date.parse(value));
+    return [start,end,asOf].every(Number.isFinite) && end - start === 7 * 86400000 && asOf >= start && asOf < end && Array.isArray(result.records) && result.records.every(record => {
+      const created = Date.parse(record.createdAt);
+      return Number.isFinite(created) && created >= start && created < end && created <= asOf;
+    });
+  }
+  function clearListScope() {
+    ++historyGeneration;
+    Object.assign(state, {records:[], selected:null, savedRecord:null, history:[], historyError:'', historyLoading:false, creationWindow:null, offset:0, total:0, mobileDetail:false, confirm:false, pending:null});
+  }
   const rowErrorMessages = {
     invalid_code:'รหัสไม่ถูกต้อง กรุณาตรวจรหัสในไฟล์และเก็บเป็นข้อความ',
     missing_code:'ไม่มีรหัส กรุณาระบุรหัสจากระบบเดิม',
@@ -55,7 +72,7 @@
     return key === 'price' ? Number(value).toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' บาท' : value;
   }
   let session = null, accessRetry = null, authGeneration = 0, navigationGeneration = 0, listGeneration = 0, historyGeneration = 0, toastTimer, searchTimer;
-  const state = {dataset:'products', records:[], totals:{}, total:0, counts:{}, offset:0, limit:100, selected:null, savedRecord:null, search:'', status:'active', loading:false, listError:null, busy:false, mode:'view', draft:null, editRecord:null, errors:{}, confirm:false, pending:null, mobileDetail:false, history:[], historyLoading:false, historyError:'', view:'catalog', import:null};
+  const state = {dataset:'products', records:[], totals:{}, total:0, counts:{}, offset:0, limit:100, selected:null, savedRecord:null, search:'', status:'active', createdThisWeek:false, creationWindow:null, loading:false, listError:null, busy:false, mode:'view', draft:null, editRecord:null, errors:{}, confirm:false, pending:null, mobileDetail:false, history:[], historyLoading:false, historyError:'', view:'catalog', import:null};
   const api = MasterDataAPI.create(() => session, invalidate);
   const permitted = key => MasterDataAPI.hasAdminRole(session) && Boolean(session?.perms?.[APP_ID]?.includes(key));
   const canManage = dataset => permitted(meta[dataset].manage);
@@ -70,7 +87,7 @@
   function invalidate(text, failure) {
     session = null; accessRetry = null; ++authGeneration; ++listGeneration; ++historyGeneration;
     clearTimeout(searchTimer); clearTimeout(toastTimer);
-    Object.assign(state, {records:[], draft:null, editRecord:null, import:null, history:[], selected:null, savedRecord:null, totals:{}, total:0, counts:{}, offset:0, search:'', status:'active', busy:false, loading:false, listError:null, mode:'view', view:'catalog', pending:null, confirm:false, errors:{}, mobileDetail:false, historyLoading:false, historyError:''});
+    Object.assign(state, {records:[], draft:null, editRecord:null, import:null, history:[], selected:null, savedRecord:null, totals:{}, total:0, counts:{}, offset:0, search:'', status:'active', createdThisWeek:false, creationWindow:null, busy:false, loading:false, listError:null, mode:'view', view:'catalog', pending:null, confirm:false, errors:{}, mobileDetail:false, historyLoading:false, historyError:''});
     ['record-list','detail-panel','import-view','dataset-tabs','app-message','user-name'].forEach(id => { byId(id).replaceChildren(); });
     byId('catalog-search').value = ''; byId('toast').replaceChildren(); byId('toast').hidden = true;
     byId('app-content').hidden = true; byId('session-screen').hidden = false;
@@ -125,7 +142,7 @@
   function renderList() {
     byId('record-list').setAttribute('aria-busy', String(state.loading));
     byId('list-count').textContent = state.loading ? 'กำลังโหลดรายการ…' : state.listError ? 'โหลดรายการไม่สำเร็จ' : `แสดง ${number(state.records.length ? state.offset + 1 : 0)}–${number(state.offset + state.records.length)} จาก ${number(state.total)} รายการ`;
-    byId('source-caption').textContent = `ใช้งานอยู่ ${number(state.counts.active)} · ปิดใช้งาน ${number(state.counts.inactive)}`;
+    byId('source-caption').textContent = state.createdThisWeek ? 'เพิ่มเข้าระบบครั้งแรก · ไม่นับการแก้ไขข้อมูลเดิม' : `ใช้งานอยู่ ${number(state.counts.active)} · ปิดใช้งาน ${number(state.counts.inactive)}`;
     byId('page-number').textContent = `หน้า ${Math.floor(state.offset / state.limit) + 1}`;
     document.querySelector('[data-action="previous-page"]').disabled = state.loading || !state.offset;
     document.querySelector('[data-action="next-page"]').disabled = state.loading || state.offset + state.limit >= state.total;
@@ -136,12 +153,12 @@
       notice = `<div class="empty-state list-error${retained ? ' list-error-notice' : ''}" role="alert"><h3>${esc(error.title)}</h3><p>${esc(error.body)}</p>${retained ? '<p>แสดงข้อมูลที่โหลดสำเร็จครั้งก่อน</p>' : ''}<button class="button button-secondary" type="button" data-action="${error.home ? 'home' : 'reload'}">${error.home ? 'กลับหน้าหลัก' : 'ลองอีกครั้ง'}</button></div>`;
       if (!retained) { byId('record-list').innerHTML = notice; return; }
     }
-    if (!state.records.length) { byId('record-list').innerHTML = `<div class="empty-state">${icon('search')}<h3>${state.search ? 'ไม่พบรายการที่ตรงกัน' : 'ยังไม่มีรายการในสถานะนี้'}</h3><p>ลองค้นหาด้วยรหัสหรือชื่อ เปลี่ยนสถานะ หรือเพิ่มรายการใหม่เมื่อมีสิทธิ์</p><button class="button button-secondary" type="button" data-action="reset-search">ล้างการค้นหาและตัวกรอง</button><button class="button button-subtle" type="button" data-action="reload">โหลดข้อมูลอีกครั้ง</button></div>`; return; }
+    if (!state.records.length) { byId('record-list').innerHTML = `<div class="empty-state">${icon('search')}<h3>${state.createdThisWeek ? 'ไม่มีสินค้าเพิ่มใหม่สัปดาห์นี้ที่ตรงกับตัวกรอง' : state.search ? 'ไม่พบรายการที่ตรงกัน' : 'ยังไม่มีรายการในสถานะนี้'}</h3><p>ลองค้นหาด้วยรหัสหรือชื่อ เปลี่ยนสถานะ หรือเพิ่มรายการใหม่เมื่อมีสิทธิ์</p><button class="button button-secondary" type="button" data-action="reset-search">ล้างการค้นหาและตัวกรอง</button><button class="button button-subtle" type="button" data-action="reload">โหลดข้อมูลอีกครั้ง</button></div>`; return; }
     const product = state.dataset === 'products', vendor = state.dataset === 'vendors';
     const columns = product ? ['รหัสสินค้า','ชื่อสินค้า / ชื่อรอง','หมวดหมู่','หน่วย','สถานะ'] : vendor ? ['รหัส','ชื่อ Vendor','ข้อมูลติดต่อ','สถานะ'] : ['รหัสสมาชิก','ชื่อสมาชิก / ลูกค้า','เบอร์โทรศัพท์','สถานะ'];
     const rows = state.records.map(record => {
       const code = `<button type="button" class="record-code-button" data-action="select" data-id="${esc(record.id)}">${esc(record.code || 'ยังไม่ได้กำหนดรหัส')}</button>`;
-      const name = `<span class="record-name">${esc(record.name)}</span>${product ? `<span class="record-subname">${esc(record.subname || 'ไม่มีชื่อรอง')}</span>` : ''}`;
+      const name = `<span class="record-name">${esc(record.name)}</span>${product ? `<span class="record-subname">${esc(record.subname || 'ไม่มีชื่อรอง')}</span>${state.createdThisWeek ? `<span class="record-added-date">เพิ่มเข้าระบบ ${esc(addedDate(record.createdAt))}</span>` : ''}` : ''}`;
       const status = `<span class="status-badge ${record.active ? '' : 'inactive'}">${record.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</span>`;
       const values = product ? [code,name,esc(record.category || '—'),esc(record.unit || '—'),status] : [code,name,esc(record.phone || record.email || 'ยังไม่ระบุ'),status];
       return `<tr class="${state.selected === record.id ? 'selected' : ''}" data-action="select" data-id="${esc(record.id)}">${values.map(value => `<td>${value}</td>`).join('')}</tr>`;
@@ -168,6 +185,7 @@
     const editing = state.mode !== 'view';
     byId('catalog-search').disabled = editing || state.busy;
     byId('status-filter').disabled = editing || state.busy;
+    byId('created-this-week').disabled = editing || state.busy;
     document.querySelector('[data-action="previous-page"]').disabled = editing || state.busy || state.loading || !state.offset;
     document.querySelector('[data-action="next-page"]').disabled = editing || state.busy || state.loading || state.offset + state.limit >= state.total;
     byId('catalog-grid').classList.toggle('mobile-detail', state.mobileDetail);
@@ -188,16 +206,23 @@
     byId('add-record').hidden = importing || !canManage(state.dataset); byId('open-import').hidden = importing || !canImport(state.dataset);
     byId('add-record').disabled = state.busy || state.loading; byId('open-import').disabled = state.busy || state.loading;
     byId('add-record').innerHTML = icon('plus') + 'เพิ่ม' + meta[state.dataset].singular; byId('open-import').innerHTML = icon('import') + 'นำเข้าข้อมูล'; byId('search-icon').innerHTML = icon('search');
+    byId('product-week-filter').hidden = importing || state.dataset !== 'products';
+    byId('created-this-week').checked = state.createdThisWeek;
+    byId('created-this-week').disabled = state.busy || state.mode !== 'view';
+    byId('creation-window').textContent = state.createdThisWeek && state.creationWindow ? addedDate(state.creationWindow.startAt) + ' – ' + addedDate(new Date(Date.parse(state.creationWindow.endAt) - 1).toISOString()) + ' · เวลาไทย' : 'จันทร์–อาทิตย์ · เวลาไทย · ตามวันที่เพิ่มเข้าระบบ';
     if (importing) renderImport(); else { renderTabs(); renderList(); renderDetail(); byId('catalog-search').value = state.search; byId('status-filter').value = state.status; }
   }
   async function loadList() {
     if (!session) return;
-    const generation = ++listGeneration, dataset = state.dataset;
+    const generation = ++listGeneration, dataset = state.dataset, createdThisWeek = state.createdThisWeek;
     state.loading = true; state.listError = null; message(''); render();
     try {
-      const result = await api.request('list', {dataset, search:state.search, status:state.status, offset:state.offset, limit:state.limit});
+      const result = await api.request('list', {dataset, search:state.search, status:state.status, offset:state.offset, limit:state.limit, ...(createdThisWeek ? {createdThisWeek:true} : {})});
       if (generation !== listGeneration || !session) return;
+      if (createdThisWeek && !validCreationWindow(result)) throw Object.assign(new Error('filter_unavailable'), {code:'filter_unavailable'});
+      state.creationWindow = createdThisWeek ? result.creationWindow : null;
       state.records = result.records; state.total = result.total; state.counts = result.counts; state.totals[dataset] = result.counts.all;
+      if (createdThisWeek && !state.records.some(record => record.id === state.selected)) state.savedRecord = null;
       if (state.records.some(record => record.id === state.selected)) state.savedRecord = null;
       else if (state.savedRecord?.id !== state.selected) state.selected = state.records[0]?.id || null;
       state.loading = false; render(); loadHistory();
@@ -215,6 +240,7 @@
     const serverFailure = {title:'ระบบขัดข้องชั่วคราว', body:'ลองอีกครั้งในอีกสักครู่ ถ้ายังไม่ได้ให้แจ้งผู้ดูแล'};
     if (['invalid_or_expired_token','invalid_session','session_changed','session_revoked','session_expired','main_signed_out','no_token','missing_token','shell_session_unavailable'].includes(reason)) return sessionFailure;
     if (['stale_record','stale_review','review_expired','duplicate_code'].includes(reason)) return {title:'โหลดข้อมูลไม่สำเร็จ', body:error.message};
+    if (reason === 'filter_unavailable') return {title:'ยังโหลดสินค้าเพิ่มใหม่ไม่ได้', body:'กรุณาโหลดหน้านี้ใหม่แล้วลองเลือกตัวกรองอีกครั้ง'};
     if (reason === 'permission_denied') return permissionFailure;
     if (['network_error','request_timeout','session_verify_timeout'].includes(reason)) return networkFailure;
     if (['internal_error','service_unavailable'].includes(reason)) return serverFailure;
@@ -242,7 +268,7 @@
     ++navigationGeneration;
     state.mode = 'view'; state.draft = null; state.editRecord = null; state.savedRecord = null; state.errors = {}; state.confirm = false; state.pending = null;
     if (action.kind === 'dataset') {
-      state.dataset = action.dataset; state.offset = 0; state.search = ''; state.status = 'active'; state.selected = null; state.mobileDetail = false; state.records = [];
+      state.dataset = action.dataset; state.createdThisWeek = false; state.creationWindow = null; state.offset = 0; state.search = ''; state.status = 'active'; state.selected = null; state.mobileDetail = false; state.records = [];
       history.replaceState({}, '', location.pathname + location.search + '#tab-' + action.dataset); render(); loadList();
     }
     if (action.kind === 'select') { state.selected = action.id; state.mobileDetail = true; renderDetail(); loadHistory(); }
@@ -334,7 +360,7 @@
     if (action === 'cancel-edit') navigate({kind:'back'});
     if (action === 'keep-editing') { state.pending = null; renderDetail(); }
     if (action === 'discard-and-go') runNavigation(state.pending);
-    if (action === 'reset-search') { state.savedRecord = null; state.search = ''; state.status = 'all'; state.offset = 0; loadList(); }
+    if (action === 'reset-search') { clearTimeout(searchTimer); clearListScope(); state.createdThisWeek = false; state.search = ''; state.status = 'all'; state.offset = 0; loadList(); }
     if (action === 'reload' || action === 'reload-record') navigate({kind:'reload'});
     if (action === 'reload-history') loadHistory();
     if (action === 'previous-page' || action === 'next-page') { state.savedRecord = null; state.offset = Math.max(0, state.offset + (action === 'next-page' ? state.limit : -state.limit)); loadList(); }
@@ -344,7 +370,7 @@
     if (action === 'import-dataset') { state.import.dataset = target.dataset.dataset; state.import.file = null; state.import.bindings = {}; state.import.error = ''; renderImport(); syncDirty(); }
     if (action === 'import-next' && state.import.file) { configureMapping(); state.import.step = 2; renderImport(); }
     if (action === 'import-back') { state.import.step = Math.max(1, state.import.step - 1); state.import.review = null; state.import.error = ''; renderImport(); }
-    if (action === 'close-import' || action === 'finish-import') { ++navigationGeneration; state.dataset = state.import.dataset; state.view = 'catalog'; state.import = null; state.mode = 'view'; state.offset = 0; state.search = ''; state.status = 'active'; state.selected = null; state.savedRecord = null; state.records = []; state.counts = {}; state.mobileDetail = false; history.replaceState({}, '', location.pathname + location.search + '#tab-' + state.dataset); syncDirty(); render(); loadList(); }
+    if (action === 'close-import' || action === 'finish-import') { ++navigationGeneration; state.dataset = state.import.dataset; state.createdThisWeek = false; state.creationWindow = null; state.view = 'catalog'; state.import = null; state.mode = 'view'; state.offset = 0; state.search = ''; state.status = 'active'; state.selected = null; state.savedRecord = null; state.records = []; state.counts = {}; state.mobileDetail = false; history.replaceState({}, '', location.pathname + location.search + '#tab-' + state.dataset); syncDirty(); render(); loadList(); }
     if (action === 'compare-import') compareImport();
     if (action === 'apply-import') applyImport();
     if (action === 'bind-vendor') { state.import.bindings[target.dataset.code] = target.dataset.id; compareImport(); }
@@ -358,6 +384,7 @@
   document.addEventListener('change', async event => {
     if (state.busy) return;
     const target = event.target;
+    if (target.id === 'created-this-week' && state.dataset === 'products' && state.mode === 'view') { clearTimeout(searchTimer); state.createdThisWeek = target.checked; clearListScope(); loadList(); }
     if (target.id === 'status-filter' && state.mode === 'view' && !state.busy) { state.savedRecord = null; state.status = target.value; state.offset = 0; loadList(); }
     if (target.id === 'import-file' && target.files[0]) {
       const imp = state.import; state.busy = true; imp.error = ''; renderImport();
